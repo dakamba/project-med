@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   Plus, Pencil, Trash2, ChevronDown, ChevronUp, ImagePlus, X, Save,
   Package, Loader2, Boxes, Receipt, TrendingUp, Calendar, Download, Upload, AlertTriangle,
-  Eye, Maximize2, Minimize2, Grid, List,
+  Eye
 } from "lucide-react";
 
 const FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');";
@@ -81,38 +81,57 @@ async function storageListKeys(prefix) {
   }
 }
 
+// --- Новая структура товара: Модель -> Цвета -> Размеры ---
 function emptyProduct() {
   return {
     id: null,
-    name: "",
+    name: "",      // Модель халата
     description: "",
     photo: null,
     createdAt: Date.now(),
-    colors: [{ id: uid(), colorName: "", colorPhoto: null, sizes: [{ id: uid(), size: "", costPrice: "", sellPrice: "", qty: "" }] }],
+    colors: [      // Массив цветов
+      { 
+        id: uid(), 
+        colorName: "", 
+        colorPhoto: null,
+        sizes: [{ id: uid(), size: "", costPrice: "", sellPrice: "", qty: "" }] 
+      }
+    ]
   };
 }
 
+// Подсчет общего количества по всем цветам и размерам
 function totalQty(product) {
-  return product.colors.reduce((sum, c) => 
-    sum + c.sizes.reduce((s, sz) => s + (Number(sz.qty) || 0), 0), 0
-  );
+  let total = 0;
+  product.colors.forEach(c => {
+    c.sizes.forEach(s => {
+      total += (Number(s.qty) || 0);
+    });
+  });
+  return total;
 }
 
+// Ценовой диапазон для товара (ищет минимальную и максимальную цену продажи по всем размерам)
 function priceRange(product) {
-  const prices = product.colors.flatMap(c => 
-    c.sizes.map((s) => Number(s.sellPrice) || 0).filter((p) => p > 0)
-  );
+  const prices = [];
+  product.colors.forEach(c => {
+    c.sizes.forEach(s => {
+      const p = Number(s.sellPrice) || 0;
+      if (p > 0) prices.push(p);
+    });
+  });
   if (prices.length === 0) return "—";
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   return min === max ? money(min) : `${money(min)} – ${money(max)}`;
 }
 
+// Компонент фото
 function PhotoBox({ photo, size = 96, onPick, onRemove, rounded = "rounded-lg", onClick }) {
   return (
     <div
-      className={`relative ${rounded} overflow-hidden flex items-center justify-center shrink-0 cursor-pointer`}
-      style={{ width: size, height: size, background: C.bg, border: `1px dashed ${C.border}` }}
+      className={`relative ${rounded} overflow-hidden flex items-center justify-center shrink-0`}
+      style={{ width: size, height: size, background: C.bg, border: `1px dashed ${C.border}`, cursor: onClick ? 'pointer' : 'default' }}
       onClick={onClick}
     >
       {photo ? (
@@ -124,7 +143,6 @@ function PhotoBox({ photo, size = 96, onPick, onRemove, rounded = "rounded-lg", 
         <label
           className="absolute inset-0 flex items-center justify-center cursor-pointer opacity-0 hover:opacity-100 transition-opacity"
           style={{ background: "rgba(30,38,32,0.55)" }}
-          onClick={(e) => e.stopPropagation()}
         >
           <ImagePlus size={20} color="#fff" />
           <input
@@ -144,36 +162,12 @@ function PhotoBox({ photo, size = 96, onPick, onRemove, rounded = "rounded-lg", 
       {photo && onRemove && (
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          className="absolute top-1 right-1 rounded-full p-0.5"
+          className="absolute top-1 right-1 rounded-full p-0.5 z-10"
           style={{ background: "rgba(30,38,32,0.7)" }}
         >
           <X size={12} color="#fff" />
         </button>
       )}
-    </div>
-  );
-}
-
-// Компонент для просмотра фото в полный экран
-function PhotoViewer({ photo, onClose }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.9)" }}
-      onClick={onClose}
-    >
-      <button
-        className="absolute top-4 right-4 text-white p-2 hover:bg-white/10 rounded-lg"
-        onClick={onClose}
-      >
-        <X size={32} />
-      </button>
-      <img
-        src={photo}
-        alt=""
-        className="max-w-full max-h-full object-contain"
-        onClick={(e) => e.stopPropagation()}
-      />
     </div>
   );
 }
@@ -193,46 +187,106 @@ function inputStyle() {
   return { border: `1px solid ${C.border}`, color: C.ink };
 }
 
-function ProductModal({ draft, onChange, onCancel, onSave }) {
-  const [photoViewer, setPhotoViewer] = useState(null);
+// --- Модальное окно просмотра товара (клик по карточке/фото) ---
+function ProductViewModal({ product, onClose }) {
+  if (!product) return null;
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center p-4 z-50"
+      style={{ background: "rgba(20,26,22,0.85)" }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="w-full rounded-2xl p-6 overflow-y-auto"
+        style={{ maxWidth: 700, maxHeight: "90vh", background: C.card, ...FONT_BODY }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 style={{ ...FONT_DISPLAY, color: C.ink, fontSize: 22, fontWeight: 800 }}>
+            {product.name}
+          </h2>
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-black/5">
+            <X size={20} color={C.sub} />
+          </button>
+        </div>
 
+        <div className="flex gap-6 mb-6">
+          {product.photo ? (
+            <img src={product.photo} alt="" className="w-40 h-40 object-cover rounded-xl" />
+          ) : (
+             <div className="w-40 h-40 rounded-xl flex items-center justify-center" style={{ background: C.bg, border: `1px dashed ${C.border}` }}>
+               <Package size={64} color={C.border} strokeWidth={1.5} />
+             </div>
+          )}
+          <div className="flex-1">
+            <p className="text-sm mb-1" style={{ color: C.sub }}>Описание</p>
+            <p className="text-sm" style={{ color: C.ink }}>{product.description || "—"}</p>
+          </div>
+        </div>
+
+        <h3 className="text-sm font-semibold mb-3" style={{ color: C.ink }}>Цвета и размеры:</h3>
+        <div className="flex flex-col gap-4">
+          {product.colors.map((c, cIdx) => (
+            <div key={c.id} className="rounded-lg p-3" style={{ background: C.bg, border: `1px solid ${C.borderSoft}` }}>
+              <div className="flex items-center gap-3 mb-2">
+                {c.colorPhoto && <img src={c.colorPhoto} alt="" className="w-8 h-8 rounded-full object-cover border" style={{borderColor: C.border}} />}
+                <span style={{ ...FONT_DISPLAY, color: C.ink, fontWeight: 700 }}>{c.colorName || `Цвет ${cIdx + 1}`}</span>
+              </div>
+              
+              <div className="grid grid-cols-3 px-2 py-1 text-xs" style={{ color: C.sub }}>
+                <div>Размер</div>
+                <div className="text-right">Цена</div>
+                <div className="text-right">Кол-во</div>
+              </div>
+              {c.sizes.map((s) => (
+                <div key={s.id} className="grid grid-cols-3 px-2 py-1.5 text-sm border-t" style={{ borderColor: C.borderSoft }}>
+                  <div style={{ color: C.ink, ...FONT_MONO }}>{s.size || "—"}</div>
+                  <div className="text-right" style={{ color: C.ink, ...FONT_MONO }}>{money(s.sellPrice)}</div>
+                  <div className="text-right" style={{ color: C.ink, ...FONT_MONO }}>{s.qty || 0}</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Модальное окно редактирования (Модель -> Цвет -> Размер) ---
+function ProductModal({ draft, onChange, onCancel, onSave }) {
   const setField = (field, value) => onChange({ ...draft, [field]: value });
 
+  // Работа с цветами
   const setColor = (id, field, value) => {
     onChange({
       ...draft,
       colors: draft.colors.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
     });
   };
-
-  const setSize = (colorId, sizeId, field, value) => {
-    onChange({
-      ...draft,
-      colors: draft.colors.map((c) =>
-        c.id === colorId
-          ? { ...c, sizes: c.sizes.map((s) => (s.id === sizeId ? { ...s, [field]: value } : s)) }
-          : c
-      ),
-    });
-  };
-
   const addColor = () => {
     onChange({
       ...draft,
-      colors: [...draft.colors, { 
-        id: uid(), 
-        colorName: "", 
-        colorPhoto: null,
-        sizes: [{ id: uid(), size: "", costPrice: "", sellPrice: "", qty: "" }] 
-      }],
+      colors: [...draft.colors, { id: uid(), colorName: "", colorPhoto: null, sizes: [{ id: uid(), size: "", costPrice: "", sellPrice: "", qty: "" }] }],
     });
   };
-
   const removeColor = (id) => {
     if (draft.colors.length === 1) return;
     onChange({ ...draft, colors: draft.colors.filter((c) => c.id !== id) });
   };
 
+  // Работа с размерами внутри цвета
+  const setSize = (colorId, sizeId, field, value) => {
+    onChange({
+      ...draft,
+      colors: draft.colors.map((c) => 
+        c.id === colorId 
+          ? { ...c, sizes: c.sizes.map((s) => (s.id === sizeId ? { ...s, [field]: value } : s)) }
+          : c
+      ),
+    });
+  };
   const addSize = (colorId) => {
     onChange({
       ...draft,
@@ -243,10 +297,7 @@ function ProductModal({ draft, onChange, onCancel, onSave }) {
       ),
     });
   };
-
   const removeSize = (colorId, sizeId) => {
-    const color = draft.colors.find(c => c.id === colorId);
-    if (color && color.sizes.length === 1) return;
     onChange({
       ...draft,
       colors: draft.colors.map((c) =>
@@ -257,7 +308,7 @@ function ProductModal({ draft, onChange, onCancel, onSave }) {
     });
   };
 
-  const canSave = draft.name.trim().length > 0;
+  const canSave = draft.name.trim().length > 0 && draft.colors.some(c => c.colorName.trim().length > 0);
 
   return (
     <div
@@ -269,7 +320,7 @@ function ProductModal({ draft, onChange, onCancel, onSave }) {
     >
       <div
         className="w-full rounded-2xl p-6 overflow-y-auto"
-        style={{ maxWidth: 720, maxHeight: "88vh", background: C.card, ...FONT_BODY }}
+        style={{ maxWidth: 700, maxHeight: "88vh", background: C.card, ...FONT_BODY }}
       >
         <div className="flex items-center justify-between mb-5">
           <h2 style={{ ...FONT_DISPLAY, color: C.ink, fontSize: 20, fontWeight: 800 }}>
@@ -280,21 +331,20 @@ function ProductModal({ draft, onChange, onCancel, onSave }) {
           </button>
         </div>
 
-        <div className="flex gap-4 mb-5">
+        <div className="flex gap-4 mb-6">
           <PhotoBox
             photo={draft.photo}
-            size={100}
+            size={96}
             onPick={(dataUrl) => setField("photo", dataUrl)}
             onRemove={() => setField("photo", null)}
-            onClick={() => draft.photo && setPhotoViewer(draft.photo)}
           />
           <div className="flex-1 flex flex-col gap-3">
-            <Field label="Название модели">
+            <Field label="Название модели халата">
               <input
                 autoFocus
                 value={draft.name}
                 onChange={(e) => setField("name", e.target.value)}
-                placeholder="Например: Халат классический"
+                placeholder="Например: Халат махровый классический"
                 className="w-full rounded-lg px-3 py-2 text-sm outline-none"
                 style={inputStyle()}
               />
@@ -303,7 +353,7 @@ function ProductModal({ draft, onChange, onCancel, onSave }) {
               <textarea
                 value={draft.description}
                 onChange={(e) => setField("description", e.target.value)}
-                placeholder="Ткань, состав, особенности..."
+                placeholder="Общее описание модели..."
                 rows={2}
                 className="w-full rounded-lg px-3 py-2 text-sm outline-none resize-none"
                 style={inputStyle()}
@@ -312,118 +362,118 @@ function ProductModal({ draft, onChange, onCancel, onSave }) {
           </div>
         </div>
 
-        <div className="mb-3">
+        <div className="mb-2 flex justify-between items-center">
           <label className="text-xs font-medium" style={{ color: C.sub }}>
-            Цвета и размеры — себестоимость, цена продажи и количество
+            Цвета модели и их размеры
           </label>
         </div>
 
-        {draft.colors.map((color, ci) => (
-          <div key={color.id} className="mb-4 rounded-lg" style={{ border: `1px solid ${C.borderSoft}` }}>
-            <div className="flex items-center gap-3 p-3" style={{ background: C.bg }}>
-              <PhotoBox
-                photo={color.colorPhoto}
-                size={48}
-                onPick={(dataUrl) => setColor(color.id, "colorPhoto", dataUrl)}
-                onRemove={() => setColor(color.id, "colorPhoto", null)}
-                rounded="rounded-md"
-                onClick={() => color.colorPhoto && setPhotoViewer(color.colorPhoto)}
-              />
-              <input
-                value={color.colorName}
-                onChange={(e) => setColor(color.id, "colorName", e.target.value)}
-                placeholder="Цвет (например: Чёрный)"
-                className="flex-1 rounded-md px-3 py-1.5 text-sm outline-none"
-                style={inputStyle()}
-              />
-              <button
-                onClick={() => removeColor(color.id)}
-                disabled={draft.colors.length === 1}
-                className="p-1.5 rounded-md disabled:opacity-30"
-                style={{ color: C.alert }}
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-
-            <div className="p-3">
-              <div
-                className="grid grid-cols-12 gap-2 px-2 py-1.5 text-xs"
-                style={{ color: C.sub }}
-              >
-                <div className="col-span-3">Размер</div>
-                <div className="col-span-3">Себестоимость</div>
-                <div className="col-span-3">Цена продажи</div>
-                <div className="col-span-2">Кол-во</div>
-                <div className="col-span-1"></div>
-              </div>
-              {color.sizes.map((s, si) => (
-                <div
-                  key={s.id}
-                  className="grid grid-cols-12 gap-2 px-2 py-1.5 items-center"
-                  style={{ borderTop: si > 0 ? `1px solid ${C.borderSoft}` : "none" }}
-                >
+        {/* Список цветов */}
+        <div className="flex flex-col gap-4 mb-6">
+          {draft.colors.map((c, cIdx) => (
+            <div key={c.id} className="rounded-lg p-3" style={{ border: `1px solid ${C.borderSoft}`, background: C.bg }}>
+              
+              {/* Заголовок цвета */}
+              <div className="flex gap-3 items-center mb-2">
+                <PhotoBox
+                  photo={c.colorPhoto}
+                  size={48}
+                  rounded="rounded-full"
+                  onPick={(dataUrl) => setColor(c.id, "colorPhoto", dataUrl)}
+                  onRemove={() => setColor(c.id, "colorPhoto", null)}
+                />
+                <div className="flex-1 flex gap-2">
                   <input
-                    value={s.size}
-                    onChange={(e) => setSize(color.id, s.id, "size", e.target.value)}
-                    placeholder="S / M / L"
-                    className="col-span-3 rounded-md px-2 py-1 text-sm outline-none"
+                    value={c.colorName}
+                    onChange={(e) => setColor(c.id, "colorName", e.target.value)}
+                    placeholder="Цвет (например: Белый)"
+                    className="flex-1 rounded-lg px-3 py-2 text-sm outline-none"
                     style={inputStyle()}
                   />
-                  <input
-                    type="number"
-                    min="0"
-                    value={s.costPrice}
-                    onChange={(e) => setSize(color.id, s.id, "costPrice", e.target.value)}
-                    placeholder="0"
-                    className="col-span-3 rounded-md px-2 py-1 text-sm outline-none"
-                    style={{ ...inputStyle(), ...FONT_MONO }}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    value={s.sellPrice}
-                    onChange={(e) => setSize(color.id, s.id, "sellPrice", e.target.value)}
-                    placeholder="0"
-                    className="col-span-3 rounded-md px-2 py-1 text-sm outline-none"
-                    style={{ ...inputStyle(), ...FONT_MONO }}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    value={s.qty}
-                    onChange={(e) => setSize(color.id, s.id, "qty", e.target.value)}
-                    placeholder="0"
-                    className="col-span-2 rounded-md px-2 py-1 text-sm outline-none"
-                    style={{ ...inputStyle(), ...FONT_MONO }}
-                  />
                   <button
-                    onClick={() => removeSize(color.id, s.id)}
-                    disabled={color.sizes.length === 1}
-                    className="col-span-1 flex items-center justify-center rounded-md p-1 disabled:opacity-30"
-                    style={{ color: C.alert }}
+                    onClick={() => removeColor(c.id)}
+                    disabled={draft.colors.length === 1}
+                    className="px-3 py-2 rounded-lg text-sm disabled:opacity-30"
+                    style={{ color: C.alert, border: `1px solid ${C.border}` }}
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={15} />
                   </button>
                 </div>
-              ))}
+              </div>
+
+              {/* Таблица размеров для этого цвета */}
+              <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.borderSoft}`, background: C.card }}>
+                <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs" style={{ background: C.card, color: C.sub, borderBottom: `1px solid ${C.borderSoft}` }}>
+                  <div className="col-span-3">Размер</div>
+                  <div className="col-span-3">Себестоимость</div>
+                  <div className="col-span-3">Цена продажи</div>
+                  <div className="col-span-2">Кол-во</div>
+                  <div className="col-span-1"></div>
+                </div>
+                {c.sizes.map((s, sIdx) => (
+                  <div key={s.id} className="grid grid-cols-12 gap-2 px-3 py-2 items-center" style={{ borderTop: sIdx > 0 ? `1px solid ${C.borderSoft}` : "none", background: C.card }}>
+                    <input
+                      value={s.size}
+                      onChange={(e) => setSize(c.id, s.id, "size", e.target.value)}
+                      placeholder="S / M / L"
+                      className="col-span-3 rounded-md px-2 py-1.5 text-sm outline-none"
+                      style={inputStyle()}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      value={s.costPrice}
+                      onChange={(e) => setSize(c.id, s.id, "costPrice", e.target.value)}
+                      placeholder="0"
+                      className="col-span-3 rounded-md px-2 py-1.5 text-sm outline-none"
+                      style={{ ...inputStyle(), ...FONT_MONO }}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      value={s.sellPrice}
+                      onChange={(e) => setSize(c.id, s.id, "sellPrice", e.target.value)}
+                      placeholder="0"
+                      className="col-span-3 rounded-md px-2 py-1.5 text-sm outline-none"
+                      style={{ ...inputStyle(), ...FONT_MONO }}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      value={s.qty}
+                      onChange={(e) => setSize(c.id, s.id, "qty", e.target.value)}
+                      placeholder="0"
+                      className="col-span-2 rounded-md px-2 py-1.5 text-sm outline-none"
+                      style={{ ...inputStyle(), ...FONT_MONO }}
+                    />
+                    <button
+                      onClick={() => removeSize(c.id, s.id)}
+                      disabled={c.sizes.length === 1}
+                      className="col-span-1 flex items-center justify-center rounded-md p-1.5 disabled:opacity-30"
+                      style={{ color: C.alert }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
               <button
-                onClick={() => addSize(color.id)}
-                className="flex items-center gap-1 text-xs px-2 py-1 rounded-md mt-2"
+                onClick={() => addSize(c.id)}
+                className="mt-2 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
                 style={{ border: `1px dashed ${C.border}`, color: C.teal }}
               >
-                <Plus size={12} /> Добавить размер
+                <Plus size={12} /> Добавить размер к этому цвету
               </button>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
 
         <button
           onClick={addColor}
-          className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg mb-4"
-          style={{ border: `1px dashed ${C.border}`, color: C.teal }}
+          className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg mb-6 w-full justify-center"
+          style={{ border: `2px dashed ${C.border}`, color: C.accentDark, background: C.accentBg }}
         >
-          <Plus size={14} /> Добавить цвет
+          <Plus size={16} /> Добавить цвет к этой модели
         </button>
 
         <div className="flex justify-end gap-2">
@@ -444,276 +494,135 @@ function ProductModal({ draft, onChange, onCancel, onSave }) {
           </button>
         </div>
       </div>
-      {photoViewer && <PhotoViewer photo={photoViewer} onClose={() => setPhotoViewer(null)} />}
     </div>
   );
 }
 
+// --- Карточка товара ---
 function ProductCard({ product, expanded, onToggle, onEdit, onDelete, onView }) {
   const qty = totalQty(product);
   const low = qty === 0;
-  const [photoViewer, setPhotoViewer] = useState(null);
 
-  return (
-    <>
-      <div
-        className="relative rounded-xl overflow-hidden flex flex-col"
-        style={{ background: C.card, border: `1px solid ${C.border}` }}
-      >
-        <div
-          className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full z-10"
-          style={{ background: C.bg, border: `1.5px solid ${C.border}` }}
-        />
-        <div className="flex gap-3 p-3">
-          <PhotoBox 
-            photo={product.photo} 
-            size={72} 
-            rounded="rounded-lg"
-            onClick={() => product.photo && setPhotoViewer(product.photo)}
-          />
-          <div className="flex-1 min-w-0">
-            <h3
-              className="truncate pr-4 cursor-pointer hover:underline"
-              style={{ ...FONT_DISPLAY, color: C.ink, fontSize: 15, fontWeight: 700 }}
-              title={product.name}
-              onClick={() => onView(product)}
-            >
-              {product.name}
-            </h3>
-            {product.description && (
-              <p className="text-xs mt-0.5 line-clamp-2" style={{ color: C.sub, ...FONT_BODY }}>
-                {product.description}
-              </p>
-            )}
-            <div className="flex items-center gap-2 mt-2 flex-wrap">
-              <span
-                className="text-xs px-2 py-0.5 rounded-full"
-                style={{
-                  background: low ? C.alertBg : C.tealBg,
-                  color: low ? C.alert : C.teal,
-                  ...FONT_MONO,
-                }}
-              >
-                {qty} шт
-              </span>
-              <span
-                className="text-xs px-2 py-0.5 rounded-full"
-                style={{ background: C.accentBg, color: C.accentDark, ...FONT_MONO }}
-              >
-                {priceRange(product)}
-              </span>
-              <span
-                className="text-xs px-2 py-0.5 rounded-full"
-                style={{ background: C.bg, color: C.sub }}
-              >
-                {product.colors.length} цв.
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center px-3 pb-2 gap-1">
-          <button
-            onClick={() => onView(product)}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-black/5"
-            style={{ color: C.teal }}
-          >
-            <Eye size={12} /> Открыть
-          </button>
-          <button
-            onClick={() => onEdit(product)}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-black/5"
-            style={{ color: C.sub }}
-          >
-            <Pencil size={12} /> Изменить
-          </button>
-          <button
-            onClick={() => onDelete(product)}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-black/5"
-            style={{ color: C.alert }}
-          >
-            <Trash2 size={12} /> Удалить
-          </button>
-          <div className="flex-1" />
-          <button
-            onClick={() => onToggle(product.id)}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-black/5"
-            style={{ color: C.sub }}
-          >
-            {product.colors.reduce((sum, c) => sum + c.sizes.length, 0)} размеров
-            {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
-        </div>
-
-        {expanded && (
-          <div style={{ borderTop: `1px dashed ${C.borderSoft}` }}>
-            {product.colors.map((color, ci) => (
-              <div key={color.id}>
-                <div
-                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium"
-                  style={{ background: ci % 2 === 0 ? C.bg : C.card, color: C.ink }}
-                >
-                  {color.colorPhoto && (
-                    <img src={color.colorPhoto} alt="" className="w-5 h-5 rounded-full object-cover" />
-                  )}
-                  {color.colorName || "Без цвета"}
-                </div>
-                <div
-                  className="grid grid-cols-3 px-3 py-0.5 text-xs"
-                  style={{ background: C.bg, color: C.sub }}
-                >
-                  <div>Размер</div>
-                  <div className="text-right">Цена продажи</div>
-                  <div className="text-right">Кол-во</div>
-                </div>
-                {color.sizes.map((s) => {
-                  const sQty = Number(s.qty) || 0;
-                  return (
-                    <div
-                      key={s.id}
-                      className="grid grid-cols-3 px-3 py-1 text-sm items-center"
-                      style={{
-                        borderTop: `1px solid ${C.borderSoft}`,
-                        background: sQty === 0 ? C.alertBg : "transparent",
-                      }}
-                    >
-                      <div style={{ color: C.ink }}>{s.size || "—"}</div>
-                      <div className="text-right" style={{ ...FONT_MONO, color: C.ink }}>
-                        {money(s.sellPrice)}
-                      </div>
-                      <div
-                        className="text-right"
-                        style={{ ...FONT_MONO, color: sQty === 0 ? C.alert : C.ink }}
-                      >
-                        {sQty}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      {photoViewer && <PhotoViewer photo={photoViewer} onClose={() => setPhotoViewer(null)} />}
-    </>
-  );
-}
-
-// Компонент для просмотра модели в деталях
-function ProductViewer({ product, onClose, onEdit }) {
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      style={{ background: "rgba(20,26,22,0.55)" }}
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      className="relative rounded-xl overflow-hidden flex flex-col cursor-pointer transition-shadow hover:shadow-md"
+      style={{ background: C.card, border: `1px solid ${C.border}` }}
+      onClick={onView}
     >
       <div
-        className="w-full rounded-2xl p-6 overflow-y-auto"
-        style={{ maxWidth: 640, maxHeight: "88vh", background: C.card, ...FONT_BODY }}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 style={{ ...FONT_DISPLAY, color: C.ink, fontSize: 22, fontWeight: 800 }}>
+        className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full z-10"
+        style={{ background: C.bg, border: `1.5px solid ${C.border}` }}
+      />
+      <div className="flex gap-3 p-3">
+        <PhotoBox photo={product.photo} size={72} rounded="rounded-lg" />
+        <div className="flex-1 min-w-0">
+          <h3
+            className="truncate pr-4"
+            style={{ ...FONT_DISPLAY, color: C.ink, fontSize: 15, fontWeight: 700 }}
+            title={product.name}
+          >
             {product.name}
-          </h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-black/5">
-            <X size={20} color={C.sub} />
-          </button>
-        </div>
-
-        {product.description && (
-          <p className="text-sm mb-4" style={{ color: C.sub }}>
-            {product.description}
-          </p>
-        )}
-
-        <div className="flex flex-wrap gap-4 mb-4">
-          {product.colors.map((color) => (
-            <div key={color.id} className="flex items-center gap-2">
-              {color.colorPhoto && (
-                <img src={color.colorPhoto} alt="" className="w-8 h-8 rounded-full object-cover" />
-              )}
-              <span className="text-sm" style={{ color: C.ink }}>{color.colorName || "Без цвета"}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-3">
-          {product.colors.map((color) => (
-            <div key={color.id} className="rounded-lg" style={{ border: `1px solid ${C.borderSoft}` }}>
-              <div className="flex items-center gap-2 px-3 py-2" style={{ background: C.bg }}>
-                {color.colorPhoto && (
-                  <img src={color.colorPhoto} alt="" className="w-6 h-6 rounded-full object-cover" />
-                )}
-                <span className="text-sm font-medium" style={{ color: C.ink }}>
-                  {color.colorName || "Без цвета"}
-                </span>
-                <span className="text-xs ml-auto" style={{ color: C.sub }}>
-                  {color.sizes.reduce((sum, s) => sum + (Number(s.qty) || 0), 0)} шт
-                </span>
-              </div>
-              <div
-                className="grid grid-cols-4 gap-2 px-3 py-1.5 text-xs"
-                style={{ color: C.sub }}
-              >
-                <div>Размер</div>
-                <div className="text-right">Себест.</div>
-                <div className="text-right">Цена</div>
-                <div className="text-right">Кол-во</div>
-              </div>
-              {color.sizes.map((s) => (
-                <div
-                  key={s.id}
-                  className="grid grid-cols-4 gap-2 px-3 py-1.5 text-sm"
-                  style={{ borderTop: `1px solid ${C.borderSoft}` }}
-                >
-                  <div style={{ color: C.ink }}>{s.size || "—"}</div>
-                  <div className="text-right" style={{ ...FONT_MONO, color: C.sub }}>
-                    {money(s.costPrice)}
-                  </div>
-                  <div className="text-right" style={{ ...FONT_MONO, color: C.ink }}>
-                    {money(s.sellPrice)}
-                  </div>
-                  <div className="text-right" style={{ ...FONT_MONO, color: C.ink }}>
-                    {Number(s.qty) || 0}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-
-        <div className="flex justify-end gap-2 mt-6">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm"
-            style={{ color: C.sub, border: `1px solid ${C.border}` }}
-          >
-            Закрыть
-          </button>
-          <button
-            onClick={() => { onClose(); onEdit(product); }}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium"
-            style={{ background: C.accent, color: "#fff" }}
-          >
-            <Pencil size={15} /> Редактировать
-          </button>
+          </h3>
+          {product.description && (
+            <p className="text-xs mt-0.5 line-clamp-2" style={{ color: C.sub, ...FONT_BODY }}>
+              {product.description}
+            </p>
+          )}
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span
+              className="text-xs px-2 py-0.5 rounded-full"
+              style={{
+                background: low ? C.alertBg : C.tealBg,
+                color: low ? C.alert : C.teal,
+                ...FONT_MONO,
+              }}
+            >
+              {qty} шт
+            </span>
+            <span
+              className="text-xs px-2 py-0.5 rounded-full"
+              style={{ background: C.accentBg, color: C.accentDark, ...FONT_MONO }}
+            >
+              {priceRange(product)}
+            </span>
+          </div>
         </div>
       </div>
+
+      <div className="flex items-center px-3 pb-2 gap-1">
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(product); }}
+          className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-black/5"
+          style={{ color: C.sub }}
+        >
+          <Pencil size={12} /> Изменить
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(product); }}
+          className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-black/5"
+          style={{ color: C.alert }}
+        >
+          <Trash2 size={12} /> Удалить
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggle(product.id); }}
+          className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:bg-black/5"
+          style={{ color: C.sub }}
+        >
+          {product.colors.length} цвет{product.colors.length === 1 ? "" : "а"}
+          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+      </div>
+
+      {expanded && (
+        <div style={{ borderTop: `1px dashed ${C.borderSoft}` }}>
+          {product.colors.map((c, idx) => (
+            <div key={c.id}>
+              <div
+                className="flex items-center px-3 py-1.5 text-xs gap-2"
+                style={{ background: C.bg, color: C.sub, borderTop: idx > 0 ? `1px solid ${C.borderSoft}` : 'none' }}
+              >
+                {c.colorPhoto && <img src={c.colorPhoto} alt="" className="w-4 h-4 rounded-full object-cover border" style={{borderColor: C.border}} />}
+                <span style={{ fontWeight: 600, color: C.ink }}>{c.colorName}</span>
+              </div>
+              {c.sizes.map((s) => {
+                const sQty = Number(s.qty) || 0;
+                return (
+                  <div
+                    key={s.id}
+                    className="grid grid-cols-3 px-3 py-1.5 text-sm items-center pl-8"
+                    style={{
+                      borderTop: `1px solid ${C.borderSoft}`,
+                      background: sQty === 0 ? C.alertBg : "transparent",
+                    }}
+                  >
+                    <div style={{ color: C.ink }}>{s.size || "—"}</div>
+                    <div className="text-right" style={{ ...FONT_MONO, color: C.ink }}>
+                      {money(s.sellPrice)}
+                    </div>
+                    <div
+                      className="text-right"
+                      style={{ ...FONT_MONO, color: sQty === 0 ? C.alert : C.ink }}
+                    >
+                      {sQty}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
+// --- Логика продаж (немного обновлена для новых данных) ---
 function emptySale(products) {
   const firstProduct = products[0] || null;
-  let firstColor = null;
-  let firstSize = null;
-  if (firstProduct) {
-    firstColor = firstProduct.colors.find(c => c.sizes.some(s => (Number(s.qty) || 0) > 0));
-    if (firstColor) {
-      firstSize = firstColor.sizes.find((s) => (Number(s.qty) || 0) > 0);
-    }
-  }
+  const firstColor = firstProduct ? firstProduct.colors.find(c => c.sizes.some(s => (Number(s.qty) || 0) > 0)) : null;
+  const firstSize = firstColor ? firstColor.sizes.find((s) => (Number(s.qty) || 0) > 0) : null;
   return {
     productId: firstProduct ? firstProduct.id : "",
     colorId: firstColor ? firstColor.id : "",
@@ -755,7 +664,7 @@ function SaleModal({ products, draft, onChange, onCancel, onSave }) {
       sellPrice: firstSize ? firstSize.sellPrice : "",
     });
   };
-
+  
   const pickColor = (colorId) => {
     const c = product ? product.colors.find((x) => x.id === colorId) : null;
     const firstSize = c ? c.sizes.find((s) => (Number(s.qty) || 0) > 0) : null;
@@ -792,7 +701,7 @@ function SaleModal({ products, draft, onChange, onCancel, onSave }) {
           </p>
         ) : (
           <div className="flex flex-col gap-3">
-            <Field label="Модель">
+            <Field label="Модель халата">
               <select
                 value={draft.productId}
                 onChange={(e) => pickProduct(e.target.value)}
@@ -807,43 +716,40 @@ function SaleModal({ products, draft, onChange, onCancel, onSave }) {
               </select>
             </Field>
 
-            {product && (
-              <Field label="Цвет">
-                <select
-                  value={draft.colorId}
-                  onChange={(e) => pickColor(e.target.value)}
-                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  style={inputStyle()}
-                >
-                  {product.colors.map((c) => (
-                    <option key={c.id} value={c.id} disabled={!c.sizes.some(s => (Number(s.qty) || 0) > 0)}>
-                      {c.colorName || "Без цвета"} 
-                      ({c.sizes.reduce((sum, s) => sum + (Number(s.qty) || 0), 0)} шт)
+            <Field label="Цвет">
+              <select
+                value={draft.colorId}
+                onChange={(e) => pickColor(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                style={inputStyle()}
+              >
+                {product &&
+                  product.colors.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.colorName || "—"}
                     </option>
                   ))}
-                </select>
-              </Field>
-            )}
+              </select>
+            </Field>
 
-            {color && (
-              <Field label="Размер">
-                <select
-                  value={draft.sizeId}
-                  onChange={(e) => pickSize(e.target.value)}
-                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  style={inputStyle()}
-                >
-                  {color.sizes.map((s) => (
+            <Field label="Размер">
+              <select
+                value={draft.sizeId}
+                onChange={(e) => pickSize(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                style={inputStyle()}
+              >
+                {color &&
+                  color.sizes.map((s) => (
                     <option key={s.id} value={s.id} disabled={(Number(s.qty) || 0) === 0}>
                       {s.size || "—"} (доступно: {Number(s.qty) || 0})
                     </option>
                   ))}
-                </select>
-              </Field>
-            )}
+              </select>
+            </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Количество">
+              <Field label="Количество продажи">
                 <input
                   type="number"
                   min="1"
@@ -1018,13 +924,14 @@ function SalesTab({ products, sales, onAddSale, onDeleteSale }) {
         <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
           <div
             className="grid gap-2 px-3 py-2 text-xs"
-            style={{ background: C.bg, color: C.sub, gridTemplateColumns: "90px 1.4fr 60px 80px 80px 90px 40px" }}
+            style={{ background: C.bg, color: C.sub, gridTemplateColumns: "90px 1.6fr 60px 90px 80px 80px 90px 40px" }}
           >
             <div>Дата</div>
-            <div>Модель / Цвет / Размер</div>
+            <div>Товар</div>
             <div className="text-right">Кол-во</div>
             <div className="text-right">Продажа</div>
             <div className="text-right">Услуга</div>
+            <div className="text-right">Доставка</div>
             <div className="text-right">Прибыль</div>
             <div></div>
           </div>
@@ -1033,19 +940,19 @@ function SalesTab({ products, sales, onAddSale, onDeleteSale }) {
               key={s.id}
               className="grid gap-2 px-3 py-2 items-center text-sm"
               style={{
-                gridTemplateColumns: "90px 1.4fr 60px 80px 80px 90px 40px",
+                gridTemplateColumns: "90px 1.6fr 60px 90px 80px 80px 90px 40px",
                 borderTop: `1px solid ${C.borderSoft}`,
               }}
             >
               <div style={{ ...FONT_MONO, color: C.sub, fontSize: 12 }}>{formatDate(s.date)}</div>
               <div className="truncate" style={{ color: C.ink }}>
                 {s.productName}
-                <span style={{ color: C.sub }}> · {s.colorLabel}</span>
-                <span style={{ color: C.sub }}> · {s.sizeLabel}</span>
+                <span style={{ color: C.sub }}> · {s.colorLabel} · {s.sizeLabel}</span>
               </div>
               <div className="text-right" style={{ ...FONT_MONO, color: C.ink }}>{s.qty}</div>
               <div className="text-right" style={{ ...FONT_MONO, color: C.ink }}>{money(s.revenue)}</div>
               <div className="text-right" style={{ ...FONT_MONO, color: C.sub }}>{money(s.service)}</div>
+              <div className="text-right" style={{ ...FONT_MONO, color: C.sub }}>{money(s.delivery)}</div>
               <div
                 className="text-right font-medium"
                 style={{ ...FONT_MONO, color: s.profit >= 0 ? C.teal : C.alert }}
@@ -1071,8 +978,9 @@ export default function InventoryApp() {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  
   const [modalDraft, setModalDraft] = useState(null);
-  const [viewProduct, setViewProduct] = useState(null);
+  const [viewProduct, setViewProduct] = useState(null); // Для просмотра товара
   const [saleDraft, setSaleDraft] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [pendingImport, setPendingImport] = useState(null);
@@ -1104,41 +1012,40 @@ export default function InventoryApp() {
       sizes: c.sizes.map((s) => ({ ...s })) 
     })) 
   });
-  const openViewProduct = (p) => setViewProduct(p);
 
   const saveProductModal = async () => {
     const draft = modalDraft;
+    
+    // Очистка и обработка данных
     const cleanColors = draft.colors
       .filter((c) => c.colorName.trim().length > 0)
       .map((c) => ({
         ...c,
+        colorName: c.colorName.trim(),
         sizes: c.sizes
           .filter((s) => s.size.trim().length > 0)
           .map((s) => ({
             ...s,
+            size: s.size.trim(),
             costPrice: Number(s.costPrice) || 0,
             sellPrice: Number(s.sellPrice) || 0,
             qty: Number(s.qty) || 0,
-          })),
+          }))
+      }))
+      // Если после фильтрации у цвета нет размеров, добавляем дефолтный
+      .map((c) => ({
+        ...c,
+        sizes: c.sizes.length ? c.sizes : [{ id: uid(), size: "—", costPrice: 0, sellPrice: 0, qty: 0 }]
       }));
-    
-    // Если нет цветов, добавляем один по умолчанию
-    const colors = cleanColors.length
-      ? cleanColors
-      : [{ 
-          id: uid(), 
-          colorName: "Основной", 
-          colorPhoto: null,
-          sizes: [{ id: uid(), size: "—", costPrice: 0, sellPrice: 0, qty: 0 }] 
-        }];
 
     const id = draft.id || uid();
     const product = {
       ...draft,
       id,
       name: draft.name.trim(),
-      colors: colors,
+      colors: cleanColors.length ? cleanColors : [{ id: uid(), colorName: "Базовый", colorPhoto: null, sizes: [{ id: uid(), size: "—", costPrice: 0, sellPrice: 0, qty: 0 }] }]
     };
+    
     await storageSet(`product:${id}`, product);
     setProducts((prev) => {
       const exists = prev.some((p) => p.id === id);
@@ -1164,7 +1071,7 @@ export default function InventoryApp() {
       productId: product.id,
       productName: product.name,
       colorId: color.id,
-      colorLabel: color.colorName || "Без цвета",
+      colorLabel: color.colorName || "—",
       sizeId: size.id,
       sizeLabel: size.size || "—",
       qty,
@@ -1178,19 +1085,19 @@ export default function InventoryApp() {
       profit,
       createdAt: Date.now(),
     };
+    
     const updatedProduct = {
       ...product,
       colors: product.colors.map((c) =>
-        c.id === color.id
-          ? { 
-              ...c, 
-              sizes: c.sizes.map((s) =>
-                s.id === size.id ? { ...s, qty: Math.max(0, (Number(s.qty) || 0) - qty) } : s
-              ) 
-            }
-          : c
+        c.id === color.id ? { 
+          ...c, 
+          sizes: c.sizes.map((s) =>
+            s.id === size.id ? { ...s, qty: Math.max(0, (Number(s.qty) || 0) - qty) } : s
+          )
+        } : c
       ),
     };
+    
     await Promise.all([
       storageSet(`sale:${saleId}`, sale),
       storageSet(`product:${product.id}`, updatedProduct),
@@ -1208,14 +1115,12 @@ export default function InventoryApp() {
       const updatedProduct = {
         ...product,
         colors: product.colors.map((c) =>
-          c.id === sale.colorId
-            ? {
-                ...c,
-                sizes: c.sizes.map((s) =>
-                  s.id === sale.sizeId ? { ...s, qty: (Number(s.qty) || 0) + sale.qty } : s
-                ),
-              }
-            : c
+          c.id === sale.colorId ? { 
+            ...c, 
+            sizes: c.sizes.map((s) =>
+              s.id === sale.sizeId ? { ...s, qty: (Number(s.qty) || 0) + sale.qty } : s
+            )
+          } : c
         ),
       };
       await storageSet(`product:${product.id}`, updatedProduct);
@@ -1226,7 +1131,7 @@ export default function InventoryApp() {
   const totalUnits = products.reduce((sum, p) => sum + totalQty(p), 0);
 
   const exportData = () => {
-    const payload = { app: "sklad", version: 2, exportedAt: Date.now(), products, sales };
+    const payload = { app: "sklad", version: 1, exportedAt: Date.now(), products, sales };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1293,7 +1198,7 @@ export default function InventoryApp() {
             </h1>
             {tab === "stock" && (
               <p className="text-sm mt-0.5" style={{ color: C.sub }}>
-                {products.length} модел{products.length === 1 ? "ь" : "и"} · {totalUnits} ед. на складе
+                {products.length} модель{products.length === 1 ? "" : "ей"} · {totalUnits} ед. на складе
               </p>
             )}
             {tab === "sales" && (
@@ -1382,7 +1287,7 @@ export default function InventoryApp() {
             <Package size={40} color={C.border} strokeWidth={1.5} />
             <p style={{ color: C.ink, fontWeight: 600 }}>Пока нет моделей</p>
             <p className="text-sm text-center max-w-xs" style={{ color: C.sub }}>
-              Добавьте первую модель халата, укажите фото, цвета и размеры с себестоимостью, ценой и количеством.
+              Добавьте первую модель халата, укажите фото и разбейте её по цветам, а цвета — по размерам с себестоимостью и ценой.
             </p>
             <button
               onClick={openNewProduct}
@@ -1404,7 +1309,7 @@ export default function InventoryApp() {
                 onToggle={(id) => setExpandedId((cur) => (cur === id ? null : id))}
                 onEdit={openEditProduct}
                 onDelete={setConfirmDelete}
-                onView={openViewProduct}
+                onView={() => setViewProduct(p)} // Вызов просмотра
               />
             ))}
           </div>
@@ -1424,11 +1329,11 @@ export default function InventoryApp() {
         />
       )}
 
+      {/* Модальное окно просмотра */}
       {viewProduct && (
-        <ProductViewer
+        <ProductViewModal
           product={viewProduct}
           onClose={() => setViewProduct(null)}
-          onEdit={openEditProduct}
         />
       )}
 
@@ -1454,7 +1359,7 @@ export default function InventoryApp() {
               <p style={{ color: C.ink, fontWeight: 700, ...FONT_DISPLAY }}>Загрузить эти данные?</p>
             </div>
             <p className="text-sm" style={{ color: C.sub }}>
-              В файле {pendingImport.products.length} модель(ей) и {pendingImport.sales.length} продаж(и).
+              В файле {pendingImport.products.length} товар(ов) и {pendingImport.sales.length} продаж(и).
               Все текущие данные на этом устройстве будут заменены содержимым файла — это нельзя отменить.
             </p>
             <div className="flex justify-end gap-2 mt-5">
@@ -1491,7 +1396,7 @@ export default function InventoryApp() {
               Удалить «{confirmDelete.name}»?
             </p>
             <p className="text-sm mt-1" style={{ color: C.sub }}>
-              Все цвета и размеры будут удалены без возможности восстановления.
+              Все цвета и данные о количестве будут удалены без возможности восстановления.
             </p>
             <div className="flex justify-end gap-2 mt-5">
               <button
