@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Plus, Pencil, Trash2, ChevronDown, ChevronUp, ImagePlus, X, Save,
-  Package, Loader2, Boxes, Receipt, TrendingUp, Calendar, Download, Upload, AlertTriangle,
-  Eye
+  Package, Loader2, Boxes, Receipt, TrendingUp, Calendar, Download, Upload, AlertTriangle
 } from "lucide-react";
 
 const FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap');";
