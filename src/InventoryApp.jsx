@@ -1,4 +1,3 @@
-```jsx
 import { useState, useEffect, useRef } from "react";
 import {
   Plus, Pencil, Trash2, ChevronDown, ChevronUp, ImagePlus, X, Save,
@@ -20,7 +19,7 @@ const C = {
   teal: "#3C6B57",
   tealBg: "#E3ECE6",
   alert: "#B23B26",
-  alertBg: "#F7E4DE",
+  alertBg: "#F7E4DE"
 };
 
 const FONT_DISPLAY = { fontFamily: "'Archivo', sans-serif" };
@@ -88,8 +87,8 @@ function emptyProduct() {
     description: "",
     photo: null,
     createdAt: Date.now(),
-    category: "",           // новое поле
-    sizes: [{ id: uid(), size: "", costPrice: "", sellPrice: "", qty: "" }],
+    category: "",
+    sizes: [{ id: uid(), size: "", costPrice: "", sellPrice: "", qty: "" }]
   };
 }
 
@@ -285,13 +284,13 @@ function ProductModal({ draft, onChange, onCancel, onSave }) {
   const setSize = (id, field, value) => {
     onChange({
       ...draft,
-      sizes: draft.sizes.map((s) => (s.id === id ? { ...s, [field]: value } : s)),
+      sizes: draft.sizes.map((s) => (s.id === id ? { ...s, [field]: value } : s))
     });
   };
   const addSize = () =>
     onChange({
       ...draft,
-      sizes: [...draft.sizes, { id: uid(), size: "", costPrice: "", sellPrice: "", qty: "" }],
+      sizes: [...draft.sizes, { id: uid(), size: "", costPrice: "", sellPrice: "", qty: "" }]
     });
   const removeSize = (id) =>
     onChange({ ...draft, sizes: draft.sizes.filter((s) => s.id !== id) });
@@ -464,7 +463,6 @@ function ProductCard({ product, expanded, onToggle, onEdit, onDelete, onView }) 
   const low = qty === 0;
 
   const handleCardClick = (e) => {
-    // Если клик по кнопке или её дочернему элементу – не открываем просмотр
     if (e.target.closest('button')) return;
     onView(product);
   };
@@ -500,7 +498,7 @@ function ProductCard({ product, expanded, onToggle, onEdit, onDelete, onView }) 
               style={{
                 background: low ? C.alertBg : C.tealBg,
                 color: low ? C.alert : C.teal,
-                ...FONT_MONO,
+                ...FONT_MONO
               }}
             >
               {qty} шт
@@ -567,7 +565,7 @@ function ProductCard({ product, expanded, onToggle, onEdit, onDelete, onView }) 
                 className="grid grid-cols-3 px-3 py-1.5 text-sm items-center"
                 style={{
                   borderTop: `1px solid ${C.borderSoft}`,
-                  background: sQty === 0 ? C.alertBg : "transparent",
+                  background: sQty === 0 ? C.alertBg : "transparent"
                 }}
               >
                 <div style={{ color: C.ink }}>{s.size || "—"}</div>
@@ -600,7 +598,7 @@ function emptySale(products) {
     date: todayStr(),
     sellPrice: firstSize ? firstSize.sellPrice : "",
     service: "",
-    delivery: "",
+    delivery: ""
   };
 }
 
@@ -627,7 +625,7 @@ function SaleModal({ products, draft, onChange, onCancel, onSave }) {
       ...draft,
       productId,
       sizeId: firstSize ? firstSize.id : "",
-      sellPrice: firstSize ? firstSize.sellPrice : "",
+      sellPrice: firstSize ? firstSize.sellPrice : ""
     });
   };
   const pickSize = (sizeId) => {
@@ -886,7 +884,7 @@ function SalesTab({ products, sales, onAddSale, onDeleteSale }) {
               className="grid gap-2 px-3 py-2 items-center text-sm"
               style={{
                 gridTemplateColumns: "90px 1.6fr 60px 90px 80px 80px 90px 40px",
-                borderTop: `1px solid ${C.borderSoft}`,
+                borderTop: `1px solid ${C.borderSoft}`
               }}
             >
               <div style={{ ...FONT_MONO, color: C.sub, fontSize: 12 }}>{formatDate(s.date)}</div>
@@ -931,17 +929,17 @@ export default function InventoryApp() {
   const [importError, setImportError] = useState("");
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
-  const [viewingProduct, setViewingProduct] = useState(null); // для просмотра товара
+  const [viewingProduct, setViewingProduct] = useState(null);
 
   useEffect(() => {
     (async () => {
       const [productKeys, saleKeys] = await Promise.all([
         storageListKeys("product:"),
-        storageListKeys("sale:"),
+        storageListKeys("sale:")
       ]);
       const [loadedProducts, loadedSales] = await Promise.all([
         Promise.all(productKeys.map((k) => storageGet(k))),
-        Promise.all(saleKeys.map((k) => storageGet(k))),
+        Promise.all(saleKeys.map((k) => storageGet(k)))
       ]);
       setProducts(loadedProducts.filter(Boolean).sort((a, b) => a.createdAt - b.createdAt));
       setSales(loadedSales.filter(Boolean));
@@ -960,7 +958,7 @@ export default function InventoryApp() {
         ...s,
         costPrice: Number(s.costPrice) || 0,
         sellPrice: Number(s.sellPrice) || 0,
-        qty: Number(s.qty) || 0,
+        qty: Number(s.qty) || 0
       }));
     const id = draft.id || uid();
     const product = {
@@ -970,7 +968,7 @@ export default function InventoryApp() {
       category: draft.category || "",
       sizes: cleanSizes.length
         ? cleanSizes
-        : [{ id: uid(), size: "—", costPrice: 0, sellPrice: 0, qty: 0 }],
+        : [{ id: uid(), size: "—", costPrice: 0, sellPrice: 0, qty: 0 }]
     };
     await storageSet(`product:${id}`, product);
     setProducts((prev) => {
@@ -1007,17 +1005,17 @@ export default function InventoryApp() {
       revenue,
       totalCost,
       profit,
-      createdAt: Date.now(),
+      createdAt: Date.now()
     };
     const updatedProduct = {
       ...product,
       sizes: product.sizes.map((s) =>
         s.id === size.id ? { ...s, qty: Math.max(0, (Number(s.qty) || 0) - qty) } : s
-      ),
+      )
     };
     await Promise.all([
       storageSet(`sale:${saleId}`, sale),
-      storageSet(`product:${product.id}`, updatedProduct),
+      storageSet(`product:${product.id}`, updatedProduct)
     ]);
     setSales((prev) => [...prev, sale]);
     setProducts((prev) => prev.map((p) => (p.id === product.id ? updatedProduct : p)));
@@ -1033,7 +1031,7 @@ export default function InventoryApp() {
         ...product,
         sizes: product.sizes.map((s) =>
           s.id === sale.sizeId ? { ...s, qty: (Number(s.qty) || 0) + sale.qty } : s
-        ),
+        )
       };
       await storageSet(`product:${product.id}`, updatedProduct);
       setProducts((prev) => prev.map((p) => (p.id === product.id ? updatedProduct : p)));
@@ -1086,12 +1084,12 @@ export default function InventoryApp() {
     setImporting(true);
     const [oldProductKeys, oldSaleKeys] = await Promise.all([
       storageListKeys("product:"),
-      storageListKeys("sale:"),
+      storageListKeys("sale:")
     ]);
     await Promise.all([...oldProductKeys, ...oldSaleKeys].map((k) => storageDelete(k)));
     await Promise.all([
       ...pendingImport.products.map((p) => storageSet(`product:${p.id}`, p)),
-      ...pendingImport.sales.map((s) => storageSet(`sale:${s.id}`, s)),
+      ...pendingImport.sales.map((s) => storageSet(`sale:${s.id}`, s))
     ]);
     setProducts(pendingImport.products.slice().sort((a, b) => a.createdAt - b.createdAt));
     setSales(pendingImport.sales);
@@ -1099,7 +1097,6 @@ export default function InventoryApp() {
     setPendingImport(null);
   };
 
-  // Группировка товаров по категориям
   const groupedProducts = products.reduce((acc, p) => {
     const cat = p.category || "Без категории";
     if (!acc[cat]) acc[cat] = [];
@@ -1249,7 +1246,6 @@ export default function InventoryApp() {
         )}
       </div>
 
-      {/* Модалка просмотра товара */}
       {viewingProduct && (
         <ProductViewModal
           product={viewingProduct}
@@ -1258,7 +1254,6 @@ export default function InventoryApp() {
         />
       )}
 
-      {/* Модалка создания/редактирования */}
       {modalDraft && (
         <ProductModal
           draft={modalDraft}
@@ -1268,7 +1263,6 @@ export default function InventoryApp() {
         />
       )}
 
-      {/* Модалка продажи */}
       {saleDraft && (
         <SaleModal
           products={products}
@@ -1279,7 +1273,6 @@ export default function InventoryApp() {
         />
       )}
 
-      {/* Подтверждение импорта */}
       {pendingImport && (
         <div
           className="fixed inset-0 flex items-center justify-center p-4 z-50"
@@ -1318,7 +1311,6 @@ export default function InventoryApp() {
         </div>
       )}
 
-      {/* Подтверждение удаления */}
       {confirmDelete && (
         <div
           className="fixed inset-0 flex items-center justify-center p-4 z-50"
@@ -1354,4 +1346,3 @@ export default function InventoryApp() {
     </div>
   );
 }
-```
